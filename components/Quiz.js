@@ -1,63 +1,66 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
+import toast from "react-hot-toast";
 
-/**
- * Quiz component — displays questions one at a time, calculates score,
- * and persists the result to the database via POST /api/quiz/submit.
- *
- * @param {{ questions: Array<{question: string, options: Array<{answer: string, isCorrect: boolean}>}> }} props
- */
-function Quiz({ questions }) {
+function Quiz({ questions, onQuizPassed }) {
   const router = useRouter();
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [showScore, setShowScore] = useState(false);
+  const [answers, setAnswers] = useState([]);
   const [score, setScore] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(null);
 
-  const submitScore = async (finalScore) => {
+  const submitScore = async (finalAnswers) => {
     setSubmitting(true);
-    setSubmitError(null);
     try {
       const courseSlug = router.query.course;
-      await fetch("/api/quiz/submit", {
+      const res = await fetch("/api/submit-quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           course: courseSlug,
-          score: finalScore,
-          total: questions.length,
+          answers: finalAnswers,
         }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.msg || "Could not save score");
+
+      setScore(data.score);
+      setShowScore(true);
+
+      if (data.passed) {
+        toast.success("Quiz passed! 🎉");
+        if (onQuizPassed) onQuizPassed(); // Notify parent component
+      } else {
+        toast.error("You need 100% to pass. Try again!");
+      }
     } catch (err) {
-      setSubmitError("Could not save your score. Please try again.");
+      toast.error(err.message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleAnswerButtonClick = (isCorrect) => {
-    const newScore = isCorrect ? score + 1 : score;
-    if (isCorrect) setScore(newScore);
+  const handleAnswerButtonClick = (index) => {
+    const newAnswers = [...answers, index];
+    setAnswers(newAnswers);
 
     const nextQuestion = currentQuestion + 1;
     if (nextQuestion < questions.length) {
       setCurrentQuestion(nextQuestion);
     } else {
-      setShowScore(true);
-      submitScore(newScore);
+      submitScore(newAnswers);
     }
   };
 
   const handleRestart = () => {
     setCurrentQuestion(0);
-    setScore(0);
+    setAnswers([]);
     setShowScore(false);
-    setSubmitError(null);
   };
 
   if (!questions || questions.length === 0) {
-    return <p className="course__quiz-empty">No quiz questions available for this course yet.</p>;
+    return null;
   }
 
   return (
@@ -65,36 +68,34 @@ function Quiz({ questions }) {
       {showScore ? (
         <div className="course__quiz-score">
           <p>
-            Your score: <strong>{score}/{questions.length}</strong>{" "}
-            {score >= Math.ceil(questions.length * 0.7) && (
-              <span role="img" aria-label="confetti">🎉</span>
-            )}
+            Your score: <strong>{score}/{questions.length}</strong>
           </p>
-          {submitting && <p className="course__quiz-saving">Saving your score…</p>}
-          {submitError && <p className="course__quiz-error">{submitError}</p>}
-          <button className="course__quiz-restart" onClick={handleRestart} aria-label="Restart quiz">
+          <button className="course__quiz-restart" onClick={handleRestart}>
             Play Again
           </button>
         </div>
       ) : (
         <>
-          <div className="course__quiz-progress" aria-label="Quiz progress">
+          <div className="course__quiz-progress">
             Question {currentQuestion + 1} of {questions.length}
           </div>
-          <div className="course__quiz-question" role="heading" aria-level="2">
+          <div className="course__quiz-question">
             {questions[currentQuestion].question}
           </div>
-          <div className="course__quiz-options" role="group" aria-label="Answer options">
-            {questions[currentQuestion].options.map((option) => (
-              <button
-                key={option.answer}
-                onClick={() => handleAnswerButtonClick(option.isCorrect)}
-                className="course__quiz-select"
-                aria-label={`Answer: ${option.answer}`}
-              >
-                {option.answer}
-              </button>
-            ))}
+          <div className="course__quiz-options">
+            {submitting ? (
+              <p>Grading quiz...</p>
+            ) : (
+              questions[currentQuestion].options.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleAnswerButtonClick(index)}
+                  className="course__quiz-select"
+                >
+                  {option.answer}
+                </button>
+              ))
+            )}
           </div>
         </>
       )}

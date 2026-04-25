@@ -5,7 +5,8 @@ import { useRouter } from "next/router";
 import { useClerk } from "@clerk/nextjs";
 import ReactPlayer from "react-player/youtube";
 import toast, { Toaster } from "react-hot-toast";
-import { ExternalLink } from "react-feather";
+import { ExternalLink, Award } from "react-feather";
+import jsPDF from "jspdf";
 
 import Quiz from "../../components/Quiz";
 
@@ -18,92 +19,167 @@ const toastStyles = {
 
 function CoursePage({ course }) {
   const router = useRouter();
-
   const { user } = useClerk();
+  
   const [checkCourseCompleted, setCheckCourseCompleted] = useState(false);
-
+  const [maxPlayedSeconds, setMaxPlayedSeconds] = useState(0);
+  const [isSeeking, setIsSeeking] = useState(false);
+  
+  const playerRef = useRef(null);
   const quizRef = useRef(null);
 
-  const onEnded = async () => {
-    quizRef.current.scrollIntoView({ behavior: "smooth" });
-
-    if (checkCourseCompleted) {
-      return;
-    }
-    toast("Yay! Completed 🎉", {
-      duration: 2000,
-      style: toastStyles,
-    });
-    try {
-      const res = await fetch("/api/updateCourse", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          course: router.query.course,
-          completed: true,
-        }),
-      });
-      setCheckCourseCompleted(true);
-
-      if (!res.ok) {
-        throw new Error("Something went wrong");
-      }
-    } catch (err) {
-      toast.error(err.message, {
-        id: "error",
-        style: toastStyles,
-      });
-    }
-  };
-
+  // Initialize progress
   useEffect(() => {
-    const getUserDetails = async () => {
+    const initUserProgress = async () => {
       try {
         const res = await fetch(`/api/user/${user.id}`);
         const data = await res.json();
 
-        // No user doc yet — create one
         if (!data.length) {
-          const res = await fetch(`/api/user`, {
+          await fetch(`/api/user`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               user: user.id,
-              courses: [{ course: router.query.course, completed: false }],
+              courses: [{ course: router.query.course, completed: false, videoProgress: 0 }],
             }),
           });
-          if (!res.ok) throw new Error("Something went wrong");
           return;
         }
 
-        const courseObj = data[0].courses.find(
-          (c) => c.course === router.query.course
-        );
+        const courseObj = data[0].courses.find((c) => c.course === router.query.course);
 
         if (courseObj) {
           setCheckCourseCompleted(courseObj.completed);
-        }
-
-        // User exists but hasn't enrolled — add the course
-        if (!courseObj) {
-          const res = await fetch(`/api/user/${user.id}`, {
+          setMaxPlayedSeconds(courseObj.videoProgress || 0);
+          // Auto-seek to where they left off
+          if (playerRef.current && courseObj.videoProgress > 0 && !courseObj.videoCompleted) {
+            playerRef.current.seekTo(courseObj.videoProgress, "seconds");
+          }
+        } else {
+          await fetch(`/api/user/${user.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              course: router.query.course,
-              completed: false,
-            }),
+            body: JSON.stringify({ course: router.query.course, completed: false }),
           });
-          if (!res.ok) throw new Error("Something went wrong");
         }
       } catch (err) {
-        toast.error(err.message, { style: toastStyles });
+        console.error("Failed to fetch progress", err);
       }
     };
-    getUserDetails();
-  }, []);
+    initUserProgress();
+  }, [user.id, router.query.course]);
+
+  const saveProgressToDB = async (playedSeconds, duration) => {
+    try {
+      const res = await fetch("/api/progress", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          course: router.query.course,
+          playedSeconds,
+          duration
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.completed) {
+        setCheckCourseCompleted(true);
+        toast.success("Course completely finished! 🎉", { style: toastStyles });
+      }
+    } catch (err) {
+      console.error("Progress save failed", err);
+    }
+  };
+
+  // Anti-skip logic
+  const handleProgress = (state) => {
+    if (isSeeking || !playerRef.current) return;
+
+    const duration = playerRef.current.getDuration();
+    if (!duration) return;
+
+    // Allow a 2-second buffer for natural playback drift.
+    // If they scrub forward beyond their maximum allowed time, forcefully rewind.
+    if (state.playedSeconds > maxPlayedSeconds + 2) {
+      playerRef.current.seekTo(maxPlayedSeconds, "seconds");
+      toast("Skipping forward is disabled 🛑", { icon: "🛑" });
+    } else {
+      const newMax = Math.max(maxPlayedSeconds, state.playedSeconds);
+      setMaxPlayedSeconds(newMax);
+
+      // Save progress to DB roughly every 10 seconds to avoid spamming the API
+      if (Math.floor(state.playedSeconds) > 0 && Math.floor(state.playedSeconds) % 10 === 0) {
+        saveProgressToDB(state.playedSeconds, duration);
+      }
+    }
+  };
+
+  const handleEnded = () => {
+    if (playerRef.current) {
+      const duration = playerRef.current.getDuration();
+      saveProgressToDB(duration, duration); // Save 100%
+    }
+    if (course.quiz && course.quiz.length > 0 && !checkCourseCompleted) {
+       toast("Video done! Scroll down to pass the quiz.", { style: toastStyles });
+       quizRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  // Force re-evaluation of completion when quiz is passed
+  const handleQuizPassed = async () => {
+    if (playerRef.current) {
+      const duration = playerRef.current.getDuration();
+      // Triggering progress save again will re-evaluate video+quiz completion on the backend
+      await saveProgressToDB(maxPlayedSeconds, duration);
+    }
+  };
+
+  const generateCertificate = () => {
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "px",
+      format: [800, 600]
+    });
+    
+    // Attempt to load the pre-designed certificate base image if available
+    try {
+        const img = new Image();
+        img.src = "/certificate.png"; // Fallback to basic text if image doesn't exist
+        doc.addImage(img, "PNG", 0, 0, 800, 600);
+    } catch (e) {
+        // Just draw a border if no image
+        doc.setLineWidth(4);
+        doc.rect(20, 20, 760, 560);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(40);
+    doc.text("Certificate of Completion", 400, 150, null, null, "center");
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(20);
+    doc.text("This certifies that", 400, 250, null, null, "center");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(35);
+    const userName = user?.fullName || user?.firstName || "Student";
+    doc.text(userName, 400, 300, null, null, "center");
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(20);
+    doc.text(`has successfully completed the course:`, 400, 370, null, null, "center");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(28);
+    doc.text(course.name, 400, 420, null, null, "center");
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(16);
+    const date = new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' });
+    doc.text(`Awarded on ${date}`, 400, 500, null, null, "center");
+
+    doc.save(`${course.course}-certificate.pdf`);
+  };
 
   return (
     <>
@@ -111,37 +187,63 @@ function CoursePage({ course }) {
       <div className="course">
         <div className="course__player">
           <ReactPlayer
-            onError={() => console.log("Something Went Wrong")}
+            ref={playerRef}
             url={course.ytURL}
             className="react-player"
             controls={true}
-            onEnded={onEnded}
+            onProgress={handleProgress}
+            onSeek={() => setIsSeeking(false)}
+            onPlay={() => setIsSeeking(false)}
+            onPause={() => setIsSeeking(true)} // Treat pause/seek dragging as seeking state
+            onEnded={handleEnded}
+            progressInterval={1000} // Fire onProgress every 1s
           />
         </div>
 
-        <div className="course__resources">
-          <h1 className="course__resources-heading">Resources</h1>
-          <div className="course__resources-list">
-            {course.resources.map((resource, index) => (
-              <a
-                href={resource.url}
-                rel="noopener noreferrer"
-                target="_blank"
-                className="course__resources-link"
-                key={index}
-              >
-                <span className="course__resources-text">{resource.name}</span>
-                <ExternalLink />
-              </a>
-            ))}
+        {course.resources && course.resources.length > 0 && (
+          <div className="course__resources">
+            <h1 className="course__resources-heading">Resources</h1>
+            <div className="course__resources-list">
+              {course.resources.map((resource, index) => (
+                <a
+                  href={resource.url}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                  className="course__resources-link"
+                  key={index}
+                >
+                  <span className="course__resources-text">{resource.name}</span>
+                  <ExternalLink />
+                </a>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="course__quiz" ref={quizRef}>
-          <div className="course__quiz-header">
-            <h1 className="course__quiz-heading">Quiz</h1>
+        )}
+
+        {course.quiz && course.quiz.length > 0 && (
+          <div className="course__quiz" ref={quizRef}>
+            <div className="course__quiz-header">
+              <h1 className="course__quiz-heading">Quiz</h1>
+            </div>
+            <Quiz questions={course.quiz} onQuizPassed={handleQuizPassed} />
           </div>
-          <Quiz questions={course.quiz} />
-        </div>
+        )}
+        
+        {checkCourseCompleted && (
+          <div className="course__certificate" style={{ textAlign: "center", marginTop: "40px", paddingBottom: "50px" }}>
+             <button 
+                onClick={generateCertificate}
+                style={{
+                  backgroundColor: "#0070f3", color: "white", padding: "15px 30px",
+                  fontSize: "1.2rem", borderRadius: "8px", border: "none", cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", gap: "10px", fontWeight: "bold"
+                }}>
+                <Award size={24} />
+                Download Certificate
+             </button>
+          </div>
+        )}
+
         <Toaster position="bottom-right" />
       </div>
     </>

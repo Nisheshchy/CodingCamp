@@ -24,7 +24,18 @@ import mongoose from "mongoose";
  */
 const UserSchema = new mongoose.Schema({
   user: { type: String, required: true, unique: true, index: true },
-  courses: { type: Array, default: [] },
+  courses: {
+    type: [
+      {
+        course: String,
+        completed: { type: Boolean, default: false },
+        videoProgress: { type: Number, default: 0 },
+        videoCompleted: { type: Boolean, default: false },
+        quizPassed: { type: Boolean, default: false },
+      },
+    ],
+    default: [],
+  },
   quizScores: {
     type: [
       {
