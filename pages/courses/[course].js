@@ -81,6 +81,7 @@ function CoursePage({ course }) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          userId: user?.id,
           course: router.query.course,
           playedSeconds,
           duration

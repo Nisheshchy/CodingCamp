@@ -1,17 +1,16 @@
-import { getAuth } from "@clerk/nextjs/server";
 import { connect } from "../../utils/db";
 import User from "../../models/User";
 
 export default async function handler(req, res) {
-  const { userId } = getAuth(req);
+  const { userId, course, completed } = req.body;
   if (!userId) return res.status(401).json({ msg: "Unauthorized" });
 
   await connect();
   try {
-    const course = await User.updateOne(
+    const updated = await User.updateOne(
       {
         user: userId,
-        "courses.course": req.body.course,
+        "courses.course": course,
       },
       {
         $set: {

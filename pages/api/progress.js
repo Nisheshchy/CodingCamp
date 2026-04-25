@@ -1,4 +1,3 @@
-import { getAuth } from "@clerk/nextjs/server";
 import { connect } from "../../utils/db";
 import User from "../../models/User";
 import Course from "../../models/Course";
@@ -6,22 +5,17 @@ import Course from "../../models/Course";
 export default async function handler(req, res) {
   if (req.method !== "PUT") return res.status(405).json({ msg: "Method not allowed" });
 
-  // Clerk v4: use getAuth to read the session
-  const { userId } = getAuth(req);
-  if (!userId) {
-    console.error("[progress] 401 - no userId from getAuth");
-    return res.status(401).json({ msg: "Unauthorized" });
-  }
-
   await connect();
 
   try {
-    const { course: courseSlug, playedSeconds, duration } = req.body;
-    if (!courseSlug || playedSeconds === undefined || !duration) {
-      return res.status(400).json({ msg: "Missing fields" });
+    const { userId, course: courseSlug, playedSeconds, duration } = req.body;
+
+    if (!userId || !courseSlug || playedSeconds === undefined || !duration) {
+      console.error("[progress] Missing fields:", { userId, courseSlug, playedSeconds, duration });
+      return res.status(400).json({ msg: "Missing required fields" });
     }
 
-    console.log(`[progress] PUT userId=${userId} course=${courseSlug} played=${playedSeconds} duration=${duration}`);
+    console.log(`[progress] PUT userId=${userId} course=${courseSlug} played=${Math.floor(playedSeconds)} duration=${Math.floor(duration)}`);
 
     const user = await User.findOne({ user: userId });
     if (!user) return res.status(404).json({ msg: "User not found" });
@@ -30,8 +24,7 @@ export default async function handler(req, res) {
     if (!userCourse) return res.status(404).json({ msg: "Course not enrolled" });
 
     // Anti-hack: only allow increasing progress
-    const currentProgress = userCourse.videoProgress || 0;
-    if (playedSeconds > currentProgress) {
+    if (playedSeconds > (userCourse.videoProgress || 0)) {
       userCourse.videoProgress = playedSeconds;
     }
 
@@ -45,7 +38,6 @@ export default async function handler(req, res) {
     const courseDoc = await Course.findOne({ course: courseSlug });
     const needsQuiz = courseDoc && courseDoc.quiz && courseDoc.quiz.length > 0;
 
-    // If no quiz is required, quizPassed defaults to true
     if (!needsQuiz) {
       userCourse.quizPassed = true;
     }

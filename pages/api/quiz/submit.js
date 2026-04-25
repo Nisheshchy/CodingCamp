@@ -1,4 +1,4 @@
-import { getAuth } from "@clerk/nextjs/server";
+
 import { connect } from "../../../utils/db";
 import User from "../../../models/User";
 
@@ -14,10 +14,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ msg: "Method not allowed" });
   }
 
-  const { userId } = getAuth(req);
+  const { userId, course, score, total } = req.body;
   if (!userId) return res.status(401).json({ msg: "Unauthorized" });
-
-  const { course, score, total } = req.body;
 
   if (!course || typeof score !== "number" || typeof total !== "number") {
     return res.status(400).json({ msg: "Invalid payload: course, score, and total are required." });

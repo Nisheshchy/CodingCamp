@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import toast from "react-hot-toast";
+import { useClerk } from "@clerk/nextjs";
 
 function Quiz({ questions, onQuizPassed }) {
   const router = useRouter();
+  const { user } = useClerk();
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [showScore, setShowScore] = useState(false);
   const [answers, setAnswers] = useState([]);
@@ -18,6 +20,7 @@ function Quiz({ questions, onQuizPassed }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          userId: user?.id,
           course: courseSlug,
           answers: finalAnswers,
         }),

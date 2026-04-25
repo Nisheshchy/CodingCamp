@@ -1,7 +1,6 @@
-import { withClerkMiddleware, getAuth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-export default withClerkMiddleware((req) => {
+export default function middleware(req) {
   const path = req.nextUrl.pathname;
 
   // Protect /admin routes with custom cookie auth
@@ -17,9 +16,8 @@ export default withClerkMiddleware((req) => {
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
-  // Run on all routes so Clerk can inject auth context for API routes
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/admin/:path*"],
 };

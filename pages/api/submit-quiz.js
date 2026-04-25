@@ -1,4 +1,3 @@
-import { getAuth } from "@clerk/nextjs/server";
 import { connect } from "../../utils/db";
 import User from "../../models/User";
 import Course from "../../models/Course";
@@ -6,13 +5,12 @@ import Course from "../../models/Course";
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ msg: "Method not allowed" });
 
-  const { userId } = getAuth(req);
-  if (!userId) return res.status(401).json({ msg: "Unauthorized" });
-
   await connect();
 
   try {
-    const { course: courseSlug, answers } = req.body;
+    const { userId, course: courseSlug, answers } = req.body;
+
+    if (!userId) return res.status(401).json({ msg: "Unauthorized" });
 
     const courseDoc = await Course.findOne({ course: courseSlug });
     if (!courseDoc || !courseDoc.quiz || courseDoc.quiz.length === 0) {
