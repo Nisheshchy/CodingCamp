@@ -2,9 +2,8 @@ import { requireAuth } from "@clerk/nextjs/api";
 import { connect } from "../../utils/db";
 import User from "../../models/User";
 
-connect();
-
 export default requireAuth(async (req, res) => {
+  await connect();
   // console.log(req.body);
   try {
     const course = await User.updateOne(

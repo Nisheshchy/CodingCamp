@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-
 import Image from "next/image";
 import Link from "next/link";
 import Router from "next/router";
@@ -7,10 +6,11 @@ import Router from "next/router";
 import { useClerk } from "@clerk/nextjs";
 import { ArrowRight } from "react-feather";
 
-import courseList from "./../data/course-list.json";
+import { connect } from "./../utils/db";
+import Course from "./../models/Course";
 import YouTubeIcon from "./../public/images/youtube.png";
 
-function Home() {
+function Home({ courseList }) {
   const { user } = useClerk();
 
   useEffect(() => {
@@ -54,7 +54,7 @@ function Home() {
 
       <section className="section-one">
         <h2 className="heading-secondary">
-          Why mini<span style={{ color: "#ec3944" }}>CodeCamp</span> ?
+          Why <span style={{ color: "#ec3944" }}>The Coding Camp</span>?
         </h2>
         <div className="section-grid one">
           <div className="card">
@@ -76,15 +76,15 @@ function Home() {
 
       <section className="section-two">
         <h2 className="heading-secondary">
-          What You'll <span style={{ color: "#ec3944" }}>Learn</span>
+          What You&apos;ll <span style={{ color: "#ec3944" }}>Learn</span>
         </h2>
         <div className="section-grid two">
           {courseList.map((course) => {
             return (
-              <div className="card" key={course.id}>
+              <div className="card" key={course.course}>
                 <img
                   src={`/images/${course.image}`}
-                  alt={course.image}
+                  alt={course.name}
                   width="100"
                   height="100"
                 />
@@ -94,29 +94,7 @@ function Home() {
           })}
         </div>
       </section>
-      <section className="section-three">
-        <Image
-          src="/images/hashnode.png"
-          width="250"
-          height="250"
-          alt="hashnode"
-        />
-        <div className="section__text-box">
-          <p className="section-three__text">
-            Connect with the global{" "}
-            <span style={{ color: "#2962ff", fontWeight: "700" }}>DEV</span>{" "}
-            community.
-          </p>
-          <a
-            href="https://hashnode.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="section-three__link"
-          >
-            Join hashnode
-          </a>
-        </div>
-      </section>
+
       <footer className="footer">
         <p>
           Made with{" "}
@@ -125,17 +103,30 @@ function Home() {
           </span>{" "}
           By{" "}
           <a
-            href="https://twitter.com/geekychakri"
+            href="https://github.com/abhishek-goswami1"
             target="_blank"
             rel="noopener noreferrer"
             className="creator"
           >
-            Chakri
+            Abhishek
           </a>
         </p>
       </footer>
     </>
   );
+}
+
+export async function getStaticProps() {
+  await connect();
+  const courses = await Course.find({ status: "published" }).select(
+    "course name image -_id"
+  );
+  return {
+    props: {
+      courseList: JSON.parse(JSON.stringify(courses)),
+    },
+    revalidate: 60, // ISR: revalidate every 60 seconds
+  };
 }
 
 export default Home;

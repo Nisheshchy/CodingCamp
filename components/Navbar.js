@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
-import { User, LogOut, TrendingUp, GitHub } from "react-feather";
+import { User, LogOut, TrendingUp, GitHub, Shield } from "react-feather";
 import { useClerk } from "@clerk/nextjs";
 
 function Navbar() {
@@ -50,7 +50,7 @@ function Navbar() {
       <div className="dropdown" ref={dropDownRef}>
         <div className="dropdown__header" onClick={displayDropDown}>
           <img
-            src={user.externalAccounts[0].avatarUrl}
+            src={user.profileImageUrl || user.imageUrl}
             alt="profile-pic"
             className="dropdown__header-img"
             width="100%"
@@ -98,8 +98,8 @@ function Navbar() {
       <Link href="/">
         <a className="navigation__logo">
           <img src="/images/logo.png" width="60" height="60" alt="logo" />
-          <span className="navigation__logo--main">mini</span>
-          <span className="navigation__logo--sub">CodeCamp</span>
+          <span className="navigation__logo--main">The Coding</span>
+          <span className="navigation__logo--sub"> Camp</span>
         </a>
       </Link>
       <div className="navigation__links">

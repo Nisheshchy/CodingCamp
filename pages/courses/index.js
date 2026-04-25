@@ -5,8 +5,6 @@ import { useClerk } from "@clerk/nextjs";
 import { CheckCircle, Youtube } from "react-feather";
 import toast from "react-hot-toast";
 
-import courseList from "../../data/course-list";
-
 const toastStyles = {
   fontSize: "1.2rem",
   fontWeight: "600",
@@ -14,84 +12,54 @@ const toastStyles = {
   color: "#fff",
 };
 
-function Courses() {
+function Courses({ courseList }) {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { user } = useClerk();
 
-  console.log({userId: user.id});
-  console.log(courses);
-
   const addCourse = async (slug) => {
-    toast.loading("Loading...", {
-      id: "loading",
-      style: toastStyles,
-    });
+    toast.loading("Loading...", { id: "loading", style: toastStyles });
     try {
       const res = await fetch(`/api/user/${user.id}`);
       const data = await res.json();
       if (data.length) {
-        // If course already exists in courses array just return
         if (data[0].courses.some((course) => course.course === slug)) {
           router.push(`/courses/${slug}`);
-          console.log("COURSE ALREADY EXISTS !");
           toast.remove("loading");
           return;
         }
-        console.log("UPDATED COURSES"); 
-        // Update the courses array by adding a new course.
-        const res = await fetch(`/api/user/${user.id}`, {
+        const updateRes = await fetch(`/api/user/${user.id}`, {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            course: slug,
-            completed: false,
-          }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ course: slug, completed: false }),
         });
-        console.log("COURSE_RESPONSE", res);
-        if (!res.ok) {
-          throw new Error("Something went wrong");
-        }
+        if (!updateRes.ok) throw new Error("Something went wrong");
         router.push(`/courses/${slug}`);
         toast.remove("loading");
         return;
       }
     } catch (err) {
       toast.remove("loading");
-      toast.error(err.message, {
-        id: "error",
-        style: toastStyles,
-      });
+      toast.error(err.message, { id: "error", style: toastStyles });
       return;
     }
-    // If the user doc doesn't exists create a new User doc.
+
     try {
-      console.log("New user doc");
-      const res = await fetch(`/api/user`, {
+      const createRes = await fetch(`/api/user`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user: user.id,
           courses: [{ course: slug, completed: false }],
         }),
       });
-      console.log(res);
-      if (!res.ok) {
-        throw new Error("Something went wrong");
-      }
+      if (!createRes.ok) throw new Error("Something went wrong");
       router.push(`/courses/${slug}`);
       toast.remove("loading");
     } catch (err) {
       toast.remove("loading");
-      toast.error(err.message, {
-        id: "error",
-        style: toastStyles,
-      });
+      toast.error(err.message, { id: "error", style: toastStyles });
     }
   };
 
@@ -105,11 +73,7 @@ function Courses() {
       try {
         const res = await fetch(`/api/user/${user.id}`);
         const data = await res.json();
-        // Check if data is empty
-        if (!data.length) {
-          setLoading(false);
-          return;
-        }
+        if (!data.length) { setLoading(false); return; }
         setCourses(data[0]?.courses);
         setLoading(false);
       } catch (err) {
@@ -129,57 +93,65 @@ function Courses() {
         </h1>
       </div>
       <div className="courses__section-grid">
-        {courseList.map((course) => {
-          return (
-            <div className="courses__card" key={course.id}>
-              <div className="courses__card-header">
-                <img
-                  src={`/images/${course.image}`}
-                  alt={course.image}
-                  width="60"
-                  height="60"
-                  className="courses__card-logo"
-                />
-                <span className="courses__card-title">{course.name}</span>
-              </div>
-
-              <div className="courses__card-body">{course.description}</div>
-
-              <div className="courses__card-footer">
-                <button
-                  className="courses__card-btn completed"
-                  onClick={() => {
-                    addCourse(course.slug);
-                  }}
-                >
-                  {loading ? (
-                    <div className="spinner light"></div>
-                  ) : courses
-                      ?.filter((item) => item.course === course.slug)
-                      .some((item) => item.completed === true) ? (
-                    <>
-                      <BtnText text="Completed" />
-                      <CheckCircle size={32} />
-                    </>
-                  ) : courses?.some((item) => item.course === course.slug) ? (
-                    <>
-                      <BtnText text="Resume Course" />
-                      <Youtube size={38} />
-                    </>
-                  ) : (
-                    <>
-                      <BtnText text="Start Course" />
-                      <Youtube size={38} />
-                    </>
-                  )}
-                </button>
-              </div>
+        {courseList.map((course) => (
+          <div className="courses__card" key={course.course}>
+            <div className="courses__card-header">
+              <img
+                src={`/images/${course.image}`}
+                alt={course.name}
+                width="60"
+                height="60"
+                className="courses__card-logo"
+              />
+              <span className="courses__card-title">{course.name}</span>
             </div>
-          );
-        })}
+
+            <div className="courses__card-body">{course.description}</div>
+
+            <div className="courses__card-footer">
+              <button
+                className="courses__card-btn completed"
+                onClick={() => addCourse(course.course)}
+              >
+                {loading ? (
+                  <div className="spinner light"></div>
+                ) : courses
+                    ?.filter((item) => item.course === course.course)
+                    .some((item) => item.completed === true) ? (
+                  <>
+                    <BtnText text="Completed" />
+                    <CheckCircle size={32} />
+                  </>
+                ) : courses?.some((item) => item.course === course.course) ? (
+                  <>
+                    <BtnText text="Resume Course" />
+                    <Youtube size={38} />
+                  </>
+                ) : (
+                  <>
+                    <BtnText text="Start Course" />
+                    <Youtube size={38} />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
+}
+
+export async function getServerSideProps() {
+  const { connect } = await import("../../utils/db");
+  const Course = (await import("../../models/Course")).default;
+  await connect();
+  const courses = await Course.find({ status: "published" }).select(
+    "course name description image -_id"
+  ).sort({ createdAt: 1 });
+  return {
+    props: { courseList: JSON.parse(JSON.stringify(courses)) },
+  };
 }
 
 export default Courses;

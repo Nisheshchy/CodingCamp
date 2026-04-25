@@ -13,6 +13,7 @@ import Layout from "../components/Layout";
 
 import "../styles/normalize.css";
 import "../styles/styles.css";
+import "../styles/admin.css";
 
 const publicPages = [
   "/",
@@ -24,30 +25,37 @@ const publicPages = [
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
 
+  // Admin pages use their own layout (AdminLayout) — skip the site Layout wrapper
+  const isAdminPage = router.pathname.startsWith("/admin");
+
   return (
     <ClerkProvider {...pageProps}>
       <Head>
-        <meta name="description" content="Mini Coding Bootcamp" />
-        <meta name="keywords" content="coding" />
+        <meta name="description" content="The Coding Camp — A free online mini coding bootcamp" />
+        <meta name="keywords" content="coding, bootcamp, web development, javascript, react" />
         <meta name="theme-color" content="#ec3944" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta property="og:title" content="miniCodeCamp" />
+        <meta property="og:title" content="The Coding Camp" />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://minicodecamp.vercel.app/" />
-        <meta property="og:description" content="Mini Coding Bootcamp" />
+        <meta property="og:description" content="The Coding Camp — Learn to code for free." />
         <meta name="twitter:card" content="summary_large_image" />
         <meta
           name="twitter:image"
           content="https://minicodecamp.vercel.app/cover.png"
         />
-        <meta name="twitter:title" content="miniCodeCamp" />
-        <meta name="twitter:description" content="Mini Coding Bootcamp" />
+        <meta name="twitter:title" content="The Coding Camp" />
+        <meta name="twitter:description" content="The Coding Camp — Learn to code for free." />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" href="/favicon.png" />
         <link rel="manifest" href="/site.webmanifest" />
-        <title>miniCodeCamp</title>
+        <title>The Coding Camp</title>
       </Head>
-      {publicPages.includes(router.pathname) ? (
+
+      {/* Admin pages: protected by cookie middleware, use their own AdminLayout — no Clerk needed */}
+      {isAdminPage ? (
+        <Component {...pageProps} />
+      ) : publicPages.includes(router.pathname) ? (
         <ClerkLoaded>
           <Layout>
             <Component {...pageProps} />

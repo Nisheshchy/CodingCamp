@@ -351,13 +351,17 @@ body {
 .courses__card {
   display: flex;
   flex-direction: column;
-  border-radius: 5px;
-  padding: 1rem;
+  border-radius: 12px;
+  padding: 1.5rem;
   background-color: #f9f4ea;
-  /* color: #1c2334; */
   border: 3px solid var(--color-primary-dark);
-  box-shadow: 0 8px 8px 0 rgb(0 0 0 / 20%);
-  box-shadow: -4px 4px 0 var(--color-primary-dark);
+  box-shadow: -6px 6px 0 var(--color-primary-dark);
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
+}
+
+.courses__card:hover {
+  transform: translate(2px, -2px);
+  box-shadow: -8px 8px 0 var(--color-primary-dark);
 }
 
 .courses__card-header {

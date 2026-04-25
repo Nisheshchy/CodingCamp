@@ -1,5 +1,38 @@
-module.exports = {
-  compiler: {
-    removeConsole: process.env.NODE_ENV === "production",
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+
+  // Security headers (Phase 4 — OWASP hardening)
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://www.youtube.com https://s.ytimg.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' https://fonts.gstatic.com",
+              "img-src 'self' data: blob: https://*.clerk.com https://img.clerk.com https://i.ytimg.com https://*.youtube.com",
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+              "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.youtube.com https://*.ytimg.com",
+            ].join("; "),
+          },
+        ],
+      },
+    ];
+  },
+
+  // Allow images from Clerk and YouTube thumbnail CDNs
+  images: {
+    domains: ["img.clerk.com", "images.clerk.dev", "i.ytimg.com"],
   },
 };
+
+module.exports = nextConfig;

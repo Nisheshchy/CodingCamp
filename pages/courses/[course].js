@@ -7,8 +7,6 @@ import ReactPlayer from "react-player/youtube";
 import toast, { Toaster } from "react-hot-toast";
 import { ExternalLink } from "react-feather";
 
-import { connect } from "./../../utils/db";
-import Course from "./../../models/Course";
 import Quiz from "../../components/Quiz";
 
 const toastStyles = {
@@ -20,15 +18,11 @@ const toastStyles = {
 
 function CoursePage({ course }) {
   const router = useRouter();
-  // console.log(router.query.course);
-  // console.log(course.resources);
 
   const { user } = useClerk();
   const [checkCourseCompleted, setCheckCourseCompleted] = useState(false);
 
   const quizRef = useRef(null);
-
-  // console.log("CHECK_COURSE_COMPLETED", checkCourseCompleted);
 
   const onEnded = async () => {
     quizRef.current.scrollIntoView({ behavior: "smooth" });
@@ -40,7 +34,6 @@ function CoursePage({ course }) {
       duration: 2000,
       style: toastStyles,
     });
-    console.log("Ended");
     try {
       const res = await fetch("/api/updateCourse", {
         method: "PATCH",
@@ -52,7 +45,6 @@ function CoursePage({ course }) {
           completed: true,
         }),
       });
-      console.log("UPDATED_RESPONSE", res);
       setCheckCourseCompleted(true);
 
       if (!res.ok) {
@@ -64,7 +56,6 @@ function CoursePage({ course }) {
         style: toastStyles,
       });
     }
-    // console.log("ENDED 💥");
   };
 
   useEffect(() => {
@@ -73,59 +64,42 @@ function CoursePage({ course }) {
         const res = await fetch(`/api/user/${user.id}`);
         const data = await res.json();
 
-        //If user visits course page without clicking start button and there's no user exists CREATE a user doc.
+        // No user doc yet — create one
         if (!data.length) {
           const res = await fetch(`/api/user`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               user: user.id,
               courses: [{ course: router.query.course, completed: false }],
             }),
           });
-
-          if (!res.ok) {
-            throw new Error("Something went wrong");
-          }
+          if (!res.ok) throw new Error("Something went wrong");
           return;
         }
 
-        console.log("DATA", data);
-
         const courseObj = data[0].courses.find(
-          (course) => course.course === router.query.course
+          (c) => c.course === router.query.course
         );
 
-        // Check the course object and find whether it's completed or not
         if (courseObj) {
           setCheckCourseCompleted(courseObj.completed);
         }
 
-        console.log("COURSE_OBJ", courseObj);
-
-        //If user visits course page without clicking the button UPDATE the User doc with the course.
-        if (courseObj?.course !== router.query.course) {
+        // User exists but hasn't enrolled — add the course
+        if (!courseObj) {
           const res = await fetch(`/api/user/${user.id}`, {
             method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               course: router.query.course,
               completed: false,
             }),
           });
-          if (!res.ok) {
-            throw new Error("Something went wrong");
-          }
-          console.log("WITHOUT_CLICK_BTN", res);
+          if (!res.ok) throw new Error("Something went wrong");
         }
       } catch (err) {
-        toast.error(err.message, {
-          style: toastStyles,
-        });
+        toast.error(err.message, { style: toastStyles });
       }
     };
     getUserDetails();
@@ -142,7 +116,6 @@ function CoursePage({ course }) {
             className="react-player"
             controls={true}
             onEnded={onEnded}
-            light={true}
           />
         </div>
 
@@ -176,34 +149,26 @@ function CoursePage({ course }) {
 }
 
 export const getStaticPaths = async () => {
-  connect();
-  const courses = await Course.find();
-  const slugs = JSON.parse(JSON.stringify(courses)).map(
-    (course) => course.course
-  );
-  const paths = slugs.map((slug) => {
-    return {
-      params: { course: slug },
-    };
-  });
-  return {
-    paths,
-    fallback: false,
-  };
+  const { connect } = await import("../../utils/db");
+  const Course = (await import("../../models/Course")).default;
+  await connect();
+  const courses = await Course.find({}, "course");
+  const paths = JSON.parse(JSON.stringify(courses)).map((c) => ({
+    params: { course: c.course },
+  }));
+  return { paths, fallback: "blocking" };
 };
 
 export const getStaticProps = async (context) => {
-  connect();
+  const { connect } = await import("../../utils/db");
+  const Course = (await import("../../models/Course")).default;
+  await connect();
   const courseID = context.params.course;
-  const courses = await Course.find();
-  //   console.log(courses);
-  const course = JSON.parse(JSON.stringify(courses)).find(
-    (course) => course.course === courseID
-  );
+  const course = await Course.findOne({ course: courseID });
+  if (!course) return { notFound: true };
   return {
-    props: {
-      course,
-    },
+    props: { course: JSON.parse(JSON.stringify(course)) },
+    revalidate: 60,
   };
 };
 

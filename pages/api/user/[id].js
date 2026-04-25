@@ -3,9 +3,8 @@ import { requireAuth } from "@clerk/nextjs/api";
 import { connect } from "../../../utils/db";
 import User from "../../../models/User";
 
-connect();
-
 export default requireAuth(async (req, res) => {
+  await connect();
   const { method } = req;
   switch (method) {
     case "GET":
