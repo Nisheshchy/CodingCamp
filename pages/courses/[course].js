@@ -26,6 +26,7 @@ function CoursePage({ course }) {
   const [isSeeking, setIsSeeking] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [duration, setDuration] = useState(0);
+  const lastSavedSecRef = useRef(0); // track last save to avoid duplicate API hits
   
   const playerRef = useRef(null);
   const quizRef = useRef(null);
@@ -96,6 +97,7 @@ function CoursePage({ course }) {
 
   // Anti-skip logic
   const handleProgress = (state) => {
+    // Only block progress tracking during an active seek scrub, NOT during normal pause
     if (isSeeking || !isReady || !duration) return;
 
     // Allow a 2-second buffer for natural playback drift.
@@ -103,14 +105,24 @@ function CoursePage({ course }) {
     if (state.playedSeconds > maxPlayedSeconds + 2) {
       if (playerRef.current) playerRef.current.seekTo(maxPlayedSeconds, "seconds");
       toast("Skipping forward is disabled 🛑", { icon: "🛑" });
-    } else {
-      const newMax = Math.max(maxPlayedSeconds, state.playedSeconds);
-      setMaxPlayedSeconds(newMax);
+      return;
+    }
 
-      // Save progress to DB roughly every 10 seconds to avoid spamming the API
-      if (Math.floor(state.playedSeconds) > 0 && Math.floor(state.playedSeconds) % 10 === 0) {
-        saveProgressToDB(state.playedSeconds, duration);
-      }
+    const newMax = Math.max(maxPlayedSeconds, state.playedSeconds);
+    setMaxPlayedSeconds(newMax);
+
+    // Save progress to DB roughly every 10 seconds to avoid spamming the API
+    const flooredSec = Math.floor(state.playedSeconds);
+    if (flooredSec > 0 && flooredSec % 10 === 0 && flooredSec !== lastSavedSecRef.current) {
+      lastSavedSecRef.current = flooredSec;
+      saveProgressToDB(state.playedSeconds, duration);
+    }
+  };
+
+  // Save progress when user pauses — captures partial progress even if they don't finish
+  const handlePause = () => {
+    if (isReady && duration > 0 && maxPlayedSeconds > 0) {
+      saveProgressToDB(maxPlayedSeconds, duration);
     }
   };
 
@@ -192,9 +204,9 @@ function CoursePage({ course }) {
             onReady={() => setIsReady(true)}
             onDuration={(d) => setDuration(d)}
             onProgress={handleProgress}
-            onSeek={() => setIsSeeking(false)}
-            onPlay={() => setIsSeeking(false)}
-            onPause={() => setIsSeeking(true)} // Treat pause/seek dragging as seeking state
+            onSeek={() => setIsSeeking(true)}  // Only set seeking during actual scrub
+            onPlay={() => setIsSeeking(false)} // Resume tracking on play
+            onPause={handlePause}              // Save progress on pause (NOT seeking)
             onEnded={handleEnded}
             progressInterval={1000} // Fire onProgress every 1s
           />

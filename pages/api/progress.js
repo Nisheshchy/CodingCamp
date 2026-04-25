@@ -44,6 +44,14 @@ export default requireAuth(async (req, res) => {
       userCourse.completed = true;
     }
 
+    console.log("Saving user progress:", {
+      videoCompleted: userCourse.videoCompleted,
+      quizPassed: userCourse.quizPassed,
+      completed: userCourse.completed,
+      needsQuiz,
+      percentage
+    });
+
     user.markModified("courses"); // FORCE MONGOOSE TO SAVE THE ARRAY CHANGES
     await user.save();
     return res.status(200).json({ 
