@@ -1,10 +1,18 @@
-import { requireAuth } from "@clerk/nextjs/api";
+import { getAuth } from "@clerk/nextjs/server";
 import { connect } from "../../utils/db";
 import User from "../../models/User";
 import Course from "../../models/Course";
 
-export default requireAuth(async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== "PUT") return res.status(405).json({ msg: "Method not allowed" });
+
+  // Clerk v4: use getAuth to read the session
+  const { userId } = getAuth(req);
+  if (!userId) {
+    console.error("[progress] 401 - no userId from getAuth");
+    return res.status(401).json({ msg: "Unauthorized" });
+  }
+
   await connect();
 
   try {
@@ -13,7 +21,9 @@ export default requireAuth(async (req, res) => {
       return res.status(400).json({ msg: "Missing fields" });
     }
 
-    const user = await User.findOne({ user: req.auth.userId });
+    console.log(`[progress] PUT userId=${userId} course=${courseSlug} played=${playedSeconds} duration=${duration}`);
+
+    const user = await User.findOne({ user: userId });
     if (!user) return res.status(404).json({ msg: "User not found" });
 
     const userCourse = user.courses.find((c) => c.course === courseSlug);
@@ -34,7 +44,7 @@ export default requireAuth(async (req, res) => {
     // Check full course completion
     const courseDoc = await Course.findOne({ course: courseSlug });
     const needsQuiz = courseDoc && courseDoc.quiz && courseDoc.quiz.length > 0;
-    
+
     // If no quiz is required, quizPassed defaults to true
     if (!needsQuiz) {
       userCourse.quizPassed = true;
@@ -44,24 +54,24 @@ export default requireAuth(async (req, res) => {
       userCourse.completed = true;
     }
 
-    console.log("Saving user progress:", {
+    console.log("[progress] Saving:", {
       videoCompleted: userCourse.videoCompleted,
       quizPassed: userCourse.quizPassed,
       completed: userCourse.completed,
-      needsQuiz,
-      percentage
+      percentage: percentage.toFixed(2),
     });
 
-    user.markModified("courses"); // FORCE MONGOOSE TO SAVE THE ARRAY CHANGES
+    user.markModified("courses");
     await user.save();
-    return res.status(200).json({ 
-      success: true, 
-      progress: userCourse.videoProgress, 
-      completed: userCourse.completed 
+
+    return res.status(200).json({
+      success: true,
+      progress: userCourse.videoProgress,
+      completed: userCourse.completed,
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("[progress] error:", err);
     return res.status(500).json({ msg: "Something went wrong" });
   }
-});
+}

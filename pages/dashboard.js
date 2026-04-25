@@ -8,15 +8,20 @@ import toast, { Toaster } from "react-hot-toast";
 
 function Dashboard() {
   const { user } = useClerk();
-  const userName = user.fullName || user.firstName;
 
   const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [noData, setNoData] = useState(false);
   const [disabled, setDisabled] = useState(true);
   const [totalCourses, setTotalCourses] = useState(null);
 
+  // Guard: don't render anything until Clerk has loaded the user
+  if (!user) {
+    return <div className="dashboard"><div className="spinner"></div></div>;
+  }
+
   const downloadPDF = async () => {
+    const userName = user?.fullName || user?.firstName || "Student";
     const existingPdfBytes = await fetch("/certificate.pdf").then((res) =>
       res.arrayBuffer()
     );
@@ -38,11 +43,24 @@ function Dashboard() {
     saveAs(uri, "thecodingcamp-certificate.pdf", { autoBom: true });
   };
 
+  // Map course slugs to their actual image filenames in /public/images/
+  const courseImageMap = {
+    hrml: "html.svg",
+    css: "css.svg",
+    git: "git.svg",
+    js: "js.svg",
+    react: "react.svg",
+    node: "node.svg",
+    mongodb: "mongodb.svg",
+    "how-website-works": "web.svg",
+    "1min": "web.svg",
+  };
+
   useEffect(() => {
+    if (!user?.id) return; // wait for Clerk to load
     setLoading(true);
 
     const fetchData = async () => {
-      if (!user?.id) return;
       try {
         // Fetch user progress and total published course count in parallel
         const [userRes, countRes] = await Promise.all([
@@ -58,7 +76,7 @@ function Dashboard() {
           (course) => course.completed === true
         ) ?? [];
 
-        // Dynamically compare against live published course count (BF-03)
+        // Unlock certificate when ALL published courses are completed
         if (total > 0 && completedCourses.length >= total) {
           setDisabled(false);
           toast("Achievement Unlocked 🏆 ", {
@@ -74,16 +92,17 @@ function Dashboard() {
         }
 
         setCourses(completedCourses);
-        setLoading(false);
         if (!completedCourses.length) setNoData(true);
+        else setNoData(false);
       } catch (err) {
         console.error(err);
+      } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [user?.id]); // re-run whenever Clerk user becomes available
 
   return (
     <div className="dashboard">
@@ -104,19 +123,23 @@ function Dashboard() {
           <p>You don&apos;t have any completed courses yet.</p>
         ) : (
           <div className="dashboard__completed-courses">
-            {courses.map((course, index) => (
-              <div key={index} className="dashboard__course">
-                <p className="dashboard__course-title">
-                  {course.course.toUpperCase()}
-                </p>
-                <img
-                  src={`/images/${course.course}.svg`}
-                  alt={course.course}
-                  width="50"
-                  height="50"
-                />
-              </div>
-            ))}
+            {courses.map((course, index) => {
+              const imgFile = courseImageMap[course.course] ?? `${course.course}.svg`;
+              return (
+                <div key={index} className="dashboard__course">
+                  <p className="dashboard__course-title">
+                    {course.course.toUpperCase()}
+                  </p>
+                  <img
+                    src={`/images/${imgFile}`}
+                    alt={course.course}
+                    width="50"
+                    height="50"
+                    onError={(e) => { e.target.style.display = "none"; }}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

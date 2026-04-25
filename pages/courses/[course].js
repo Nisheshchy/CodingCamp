@@ -72,9 +72,10 @@ function CoursePage({ course }) {
       }
     };
     initUserProgress();
-  }, [user.id, router.query.course]);
+  }, [user?.id, router.query.course]);
 
   const saveProgressToDB = async (playedSeconds, duration) => {
+    if (!router.query.course) return; // guard: no course slug yet
     try {
       const res = await fetch("/api/progress", {
         method: "PUT",
@@ -86,7 +87,12 @@ function CoursePage({ course }) {
         }),
       });
       const data = await res.json();
-      if (res.ok && data.success && data.completed) {
+      console.log(`[progress] status=${res.status} course=${router.query.course} played=${Math.floor(playedSeconds)}s`, data);
+      if (!res.ok) {
+        console.error("[progress] API error:", res.status, data);
+        return;
+      }
+      if (data.completed) {
         setCheckCourseCompleted(true);
         toast.success("Course completely finished! 🎉", { style: toastStyles });
       }

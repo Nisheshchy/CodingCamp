@@ -17,7 +17,6 @@ function Navbar() {
   };
 
   const handleClickOutside = (e) => {
-    console.log(dropDownRef.current);
     if (dropDownRef.current && !dropDownRef.current.contains(e.target)) {
       setDropDown(false);
     }
@@ -25,12 +24,10 @@ function Navbar() {
 
   const handleOffline = () => {
     setOffline(true);
-    console.log("OFFLINE");
   };
 
   const handleOnline = () => {
     setOffline(false);
-    console.log("ONLINE");
   };
 
   useEffect(() => {

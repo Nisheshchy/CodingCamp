@@ -1,14 +1,16 @@
-import { requireAuth } from "@clerk/nextjs/api";
+import { getAuth } from "@clerk/nextjs/server";
 import { connect } from "../../utils/db";
 import User from "../../models/User";
 
-export default requireAuth(async (req, res) => {
+export default async function handler(req, res) {
+  const { userId } = getAuth(req);
+  if (!userId) return res.status(401).json({ msg: "Unauthorized" });
+
   await connect();
-  // console.log(req.body);
   try {
     const course = await User.updateOne(
       {
-        user: req.auth.userId,
+        user: userId,
         "courses.course": req.body.course,
       },
       {
@@ -17,9 +19,9 @@ export default requireAuth(async (req, res) => {
         },
       }
     );
-    console.log(course);
     res.status(200).json({ success: true });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ msg: "Something went wrong" });
   }
-});
+}
