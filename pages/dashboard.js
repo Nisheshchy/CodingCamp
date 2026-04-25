@@ -42,11 +42,12 @@ function Dashboard() {
     setLoading(true);
 
     const fetchData = async () => {
+      if (!user?.id) return;
       try {
         // Fetch user progress and total published course count in parallel
         const [userRes, countRes] = await Promise.all([
-          fetch(`/api/user/${user.id}`),
-          fetch(`/api/courses/count`),
+          fetch(`/api/user/${user.id}`, { cache: "no-store" }),
+          fetch(`/api/courses/count`, { cache: "no-store" }),
         ]);
 
         const userData = await userRes.json();

@@ -24,6 +24,8 @@ function CoursePage({ course }) {
   const [checkCourseCompleted, setCheckCourseCompleted] = useState(false);
   const [maxPlayedSeconds, setMaxPlayedSeconds] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [duration, setDuration] = useState(0);
   
   const playerRef = useRef(null);
   const quizRef = useRef(null);
@@ -31,8 +33,9 @@ function CoursePage({ course }) {
   // Initialize progress
   useEffect(() => {
     const initUserProgress = async () => {
+      if (!user?.id) return;
       try {
-        const res = await fetch(`/api/user/${user.id}`);
+        const res = await fetch(`/api/user/${user.id}`, { cache: "no-store" });
         const data = await res.json();
 
         if (!data.length) {
@@ -93,15 +96,12 @@ function CoursePage({ course }) {
 
   // Anti-skip logic
   const handleProgress = (state) => {
-    if (isSeeking || !playerRef.current) return;
-
-    const duration = playerRef.current.getDuration();
-    if (!duration) return;
+    if (isSeeking || !isReady || !duration) return;
 
     // Allow a 2-second buffer for natural playback drift.
     // If they scrub forward beyond their maximum allowed time, forcefully rewind.
     if (state.playedSeconds > maxPlayedSeconds + 2) {
-      playerRef.current.seekTo(maxPlayedSeconds, "seconds");
+      if (playerRef.current) playerRef.current.seekTo(maxPlayedSeconds, "seconds");
       toast("Skipping forward is disabled 🛑", { icon: "🛑" });
     } else {
       const newMax = Math.max(maxPlayedSeconds, state.playedSeconds);
@@ -115,8 +115,7 @@ function CoursePage({ course }) {
   };
 
   const handleEnded = () => {
-    if (playerRef.current) {
-      const duration = playerRef.current.getDuration();
+    if (duration > 0) {
       saveProgressToDB(duration, duration); // Save 100%
     }
     if (course.quiz && course.quiz.length > 0 && !checkCourseCompleted) {
@@ -127,8 +126,7 @@ function CoursePage({ course }) {
 
   // Force re-evaluation of completion when quiz is passed
   const handleQuizPassed = async () => {
-    if (playerRef.current) {
-      const duration = playerRef.current.getDuration();
+    if (duration > 0) {
       // Triggering progress save again will re-evaluate video+quiz completion on the backend
       await saveProgressToDB(maxPlayedSeconds, duration);
     }
@@ -191,6 +189,8 @@ function CoursePage({ course }) {
             url={course.ytURL}
             className="react-player"
             controls={true}
+            onReady={() => setIsReady(true)}
+            onDuration={(d) => setDuration(d)}
             onProgress={handleProgress}
             onSeek={() => setIsSeeking(false)}
             onPlay={() => setIsSeeking(false)}
